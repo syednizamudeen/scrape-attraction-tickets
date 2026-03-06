@@ -1,0 +1,24 @@
+# Node.js
+node_modules/
+
+# Logs
+logs/
+*.log
+
+# Output
+output/
+
+# OS files
+.DS_Store
+
+# Backup files
+*.bak*
+
+# Env files
+.env
+
+# Playwright
+.playwright/
+
+# Misc
+config/config.json
