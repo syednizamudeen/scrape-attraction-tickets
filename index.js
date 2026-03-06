@@ -37,29 +37,13 @@ async function scrape(url) {
 
   log(`Starting scroll and card extraction for ${url}`);
   let prevCount = 0;
-  let scrolls = 0;
-  let unchangedScrolls = 0;
-  while (scrolls < maxScrolls && unchangedScrolls < 3) {
+  for (let i = 0; i < maxScrolls; i++) {
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    let cardsBefore = await page.evaluate(() => document.querySelectorAll('h2[class*="TitleView_titleText"]').length);
-    let loaded = false;
-    for (let w = 0; w < 10; w++) {
-      await page.waitForTimeout(waitTimeout / 2);
-      let cardsNow = await page.evaluate(() => document.querySelectorAll('h2[class*="TitleView_titleText"]').length);
-      if (cardsNow > cardsBefore) {
-        loaded = true;
-        break;
-      }
-    }
-    let cardCount = await page.evaluate(() => document.querySelectorAll('h2[class*="TitleView_titleText"]').length);
-    log(`Scroll ${scrolls + 1}: cardCount=${cardCount}, prevCount=${prevCount}, unchangedScrolls=${unchangedScrolls}`);
-    if (cardCount === prevCount) {
-      unchangedScrolls++;
-    } else {
-      unchangedScrolls = 0;
-    }
+    await page.waitForTimeout(waitTimeout);
+    const cardCount = await page.evaluate(() => document.querySelectorAll('h2[class*="TitleView_titleText"]').length);
+    log(`Scroll ${i + 1}: cardCount=${cardCount}, prevCount=${prevCount}`);
+    if (cardCount === prevCount) break;
     prevCount = cardCount;
-    scrolls++;
   }
   log(`Finished scrolling. Total cards found: ${prevCount}`);
 
