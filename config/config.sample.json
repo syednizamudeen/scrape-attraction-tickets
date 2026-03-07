@@ -1,7 +1,4 @@
 {
-  "urls": [
-    "https://www.tikcet.com/things-to-do/"
-  ],
   "outputDir": "output",
   "maxScrolls": 500,
   "waitTimeout": 1000
