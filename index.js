@@ -7,6 +7,21 @@ const outputDir = config.outputDir;
 const maxScrolls = config.maxScrolls;
 const waitTimeout = config.waitTimeout;
 
+function setupResourceBlock(page) {
+  page.route('**/*', (route) => {
+    const req = route.request();
+    const resourceType = req.resourceType();
+    const url = req.url();
+    if (["image", "stylesheet", "font"].includes(resourceType)) {
+      return route.abort();
+    }
+    if (url.match(/\.(png|jpg|jpeg|gif|svg|webp|ico|css|woff|woff2|ttf|otf|eot|mp4|webm|avi|mov|m4v|mp3|ogg|wav|flac|zip|rar|7z|tar|gz|pdf)(\?|$)/i)) {
+      return route.abort();
+    }
+    return route.continue();
+  });
+}
+
 async function scrape(url) {
   log(`Launching browser for URL: ${url}`);
   let browser, context, page;
@@ -24,6 +39,7 @@ async function scrape(url) {
       },
     });
     page = await context.newPage();
+    setupResourceBlock(page);
     log(`Navigating to page: ${url}`);
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 90000 });
     log(`Page loaded: ${url}`);
@@ -95,6 +111,7 @@ async function scrape(url) {
     let detailPage;
     try {
       detailPage = await context.newPage();
+      setupResourceBlock(detailPage);
       log(`Navigating to detail page: ${card.url}`);
       await detailPage.goto(card.url, {
         waitUntil: "domcontentloaded",
