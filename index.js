@@ -28,7 +28,7 @@ async function scrape(url) {
     log(`Navigating to page: ${url}`);
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 90000 });
     log(`Page loaded: ${url}`);
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(3000 + Math.random() * 1500);
   } catch (err) {
     log(`Error launching browser or navigating to ${url}: ${err.message}`);
     if (browser) await browser.close();
@@ -39,7 +39,7 @@ async function scrape(url) {
   let prevCount = 0;
   for (let i = 0; i < maxScrolls; i++) {
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await page.waitForTimeout(waitTimeout);
+    await page.waitForTimeout(waitTimeout + Math.random() * 1500);
     const cardCount = await page.evaluate(() => document.querySelectorAll('h2[class*="TitleView_titleText"]').length);
     log(`Scroll ${i + 1}: cardCount=${cardCount}, prevCount=${prevCount}`);
     if (cardCount === prevCount) break;
@@ -93,15 +93,16 @@ async function scrape(url) {
   const ticketResults = [];
   for (const card of cardData) {
     log(`Scraping ticket details for card: ${card.name} (${card.url})`);
+    let detailPage;
     try {
-      const detailPage = await context.newPage();
+      detailPage = await context.newPage();
       log(`Navigating to detail page: ${card.url}`);
       await detailPage.goto(card.url, {
         waitUntil: "domcontentloaded",
         timeout: 60000,
       });
       log(`Detail page loaded: ${card.url}`);
-      await detailPage.waitForTimeout(3000);
+      await detailPage.waitForTimeout(3000 + Math.random() * 1500);
 
       const tickets = await detailPage.evaluate(() => {
         const results = [];
@@ -123,21 +124,11 @@ async function scrape(url) {
           const discountText = discountElem
             ? discountElem.innerText.trim()
             : "";
-          const promoElem = container.querySelector(
-            'div[class*="card-tips_card_promotion_tag_row"] span',
-          );
-          const promoText = promoElem ? promoElem.innerText.trim() : "";
-          const salesElem = container.querySelector(
-            'span[class*="shelf_sales_info_text"]',
-          );
-          const salesText = salesElem ? salesElem.innerText.trim() : "";
           if (ticketType && priceText) {
             results.push({
               ticketType,
               price: priceText,
               discount: discountText,
-              promotion: promoText,
-              salesInfo: salesText,
             });
           }
         });
@@ -148,37 +139,47 @@ async function scrape(url) {
       let country = card.country;
       const scraped_date_time = new Date().toISOString();
 
-      log(`Ticket details scraped for card: ${card.name}`);
-      ticketResults.push({
-        cardName: card.name,
-        cardUrl: card.url,
-        productName,
-        country,
-        scraped_date_time,
-        tickets,
-      });
-      await detailPage.close();
+      for (const t of tickets) {
+        ticketResults.push({
+          country,
+          productName,
+          ticketName: t.ticketType,
+          price: t.price,
+          discount: t.discount,
+          scraped_date_time,
+        });
+      }
     } catch (err) {
       log(`Error scraping ticket details for card: ${card.name} (${card.url}): ${err.message}`);
-      const scraped_date_time = new Date().toISOString();
-      ticketResults.push({
-        cardName: card.name,
-        cardUrl: card.url,
-        productName: card.name,
-        country: "Singapore",
-        scraped_date_time,
-        error: err.message,
-      });
+    } finally {
+      if (detailPage) await detailPage.close();
     }
   }
-
   await browser.close();
   return ticketResults;
 }
 
 (async () => {
   log('Starting scraping for all URLs');
-  const results = await Promise.all(urls.map((url) => scrape(url)));
+  // Scrape all URLs in parallel and track region metadata
+  const scrapeMeta = urls.map(url => ({ url, startTime: new Date() }));
+  const results = await Promise.all(scrapeMeta.map(meta => scrape(meta.url)));
+  scrapeMeta.forEach((meta, idx) => {
+    meta.endTime = new Date();
+    let regionName = "unknown";
+    if (results[idx].length > 0 && results[idx][0].country) {
+      regionName = results[idx][0].country;
+    } else {
+      const match = meta.url.match(/keyword=([^&]+)/);
+      if (match && match[1]) {
+        regionName = decodeURIComponent(match[1])
+          .replace(/\s+/g, "_")
+          .toLowerCase();
+      }
+    }
+    meta.regionName = regionName;
+    meta.productCount = results[idx].length;
+  });
   results.forEach((countryResults, idx) => {
     let countryForFile = "unknown";
     if (countryResults.length > 0 && countryResults[0].country) {
@@ -194,16 +195,25 @@ async function scrape(url) {
       }
     }
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    log(`Writing ticket details to file: ${outputDir}/ticket_details_${countryForFile}_${timestamp}.json`);
+    log(`Writing ticket details to file: ${outputDir}/ticket_details_${countryForFile}_${timestamp}.csv`);
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
     }
+    // Write CSV header
     fs.writeFileSync(
-      `${outputDir}/ticket_details_${countryForFile}_${timestamp}.json`,
-      JSON.stringify(countryResults, null, 2),
+      `${outputDir}/ticket_details_${countryForFile}_${timestamp}.csv`,
+      "country,productName,ticketName,price,discount,scraped_date_time,region_scrape_start_time,region_scrape_end_time,region_product_count\n",
       "utf8",
     );
-    log(`Saved ticket details to ${outputDir}/ticket_details_${countryForFile}_${timestamp}.json`);
+    const meta = scrapeMeta[idx];
+    for (const row of countryResults) {
+      fs.appendFileSync(
+        `${outputDir}/ticket_details_${countryForFile}_${timestamp}.csv`,
+        `${row.country},${row.productName},${row.ticketName},${row.price},${row.discount},${row.scraped_date_time},${meta.startTime.toISOString()},${meta.endTime.toISOString()},${meta.productCount}\n`,
+        "utf8",
+      );
+    }
+    log(`Saved ticket details to ${outputDir}/ticket_details_${countryForFile}_${timestamp}.csv`);
   });
   log('Finished scraping for all URLs');
 })();
