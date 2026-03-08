@@ -1,5 +1,5 @@
-
 const { chromium } = require("playwright");
+const { randomUserAgent } = require("./user_agents");
 
 function setupResourceBlock(page) {
   page.route('**/*', (route) => {
@@ -23,8 +23,7 @@ async function scrapeTrip(url, { fs, log, config }) {
     browser = await chromium.launch({ headless: true });
     log(`Browser launched successfully for URL: ${url}`);
     context = await browser.newContext({
-      userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      userAgent: randomUserAgent(),
       viewport: { width: 1280, height: 800 },
       locale: "en-US",
       extraHTTPHeaders: {

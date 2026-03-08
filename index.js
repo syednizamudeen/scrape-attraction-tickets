@@ -54,6 +54,18 @@ const { scrapeTrip } = require("./scrape_trip");
     }
     log(`Saved ticket details to ${config.outputDir}/ticket_details_${countryForFile}_${timestamp}.csv`);
     log('Finished scraping for platform: trip');
+  } else if (platformType === "gyg") {
+    log(`Starting scraping for platform: gyg, URL: ${url}`);
+    const { scrapeGYG } = require("./scrape_gyg");
+    let results;
+    try {
+      results = await scrapeGYG(url, { fs, log, config });
+    } catch (err) {
+      log(`Scraping failed for URL: ${url} - ${err.message}`);
+      process.exit(1);
+    }
+    // TODO: Implement file writing logic similar to trip
+    log('Finished scraping for platform: gyg');
   } else {
     log(`Platform type '${platformType}' is not supported yet.`);
     process.exit(1);
