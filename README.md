@@ -24,14 +24,18 @@ git pull
 npm install
 ```
 
-### 4. Install Playwright Browsers
+### 4. Make Shell Script Executable
+```
+chmod +x run_scrapers.sh
+```
+
+### 5. Install Playwright Browsers
 ```
 npx playwright install
 ```
 
-### 5. Update Configuration
+### 6. Update Configuration
 Edit `config/config.json` to set:
-- `urls`: Array of Trip.com URLs to scrape
 - `outputDir`: Directory for output files (e.g., `output/`)
 - `maxScrolls`: Number of scrolls per page
 - `waitTimeout`: Wait time (ms) after each scroll
@@ -39,42 +43,56 @@ Edit `config/config.json` to set:
 Example:
 ```
 {
-  "urls": [
-    "https://www.trip.com/things-to-do/list?pagetype=city&keyword=singapore&pshowcode=Ticket2&kwdfrom=srch&ext-searchpage=1"
-  ],
   "outputDir": "output",
   "maxScrolls": 20,
   "waitTimeout": 2000
 }
 ```
 
-### 6. Start the Application
+pm install -g pm2
+pm install -g pm2
+### 7. Start the Application (Scrapping)
+Run the scraper by specifying the platform type and the URL:
 ```
-npm start
+node index.js <platform_type> <url>
+```
+For Trip.com, use:
+```
+node index.js trip https://www.trip.com/things-to-do/
+```
+As you add new platforms, use their platform type and URL:
+```
+node index.js <new_platform_type> <url>
 ```
 
-### 7. (Optional) Use a Process Manager for Production
+### 8. Run Multiple Scrapers in Parallel
+Use the shell script to run all scrapers at once:
+```
+./run_scrapers.sh
+```
+
+### 9. (Optional) Use a Process Manager for Production
 For reliability, use PM2:
 ```
 pm install -g pm2
-pm2 start index.js --name ota-crawl
+pm2 start index.js --name ota-crawl -- trip <url>
 ```
 
-### 8. Check Output
+### 10. Check Output
 - Card names: `output/card_names_<country>_<timestamp>.txt`
-- Ticket details: `output/ticket_details_<country>_<timestamp>.json`
+- Ticket details: `output/ticket_details_<country>_<timestamp>.csv`
 
-### 9. Logs
+### 11. Logs
 - Logs are written to the `logs/` directory.
 
 ## Troubleshooting
 - Ensure Playwright browsers are installed (`npx playwright install`).
-- Check config file for correct URLs and settings.
+- Check config file for correct settings.
 - Make sure `output/` and `logs/` directories are writable.
 - Review logs for errors.
 
 ## Updating Configuration
-To change scraping targets or settings, edit `config/config.json` and restart the app.
+To change scraping settings, edit `config/config.json` and restart the app.
 
 ## License
 MIT
