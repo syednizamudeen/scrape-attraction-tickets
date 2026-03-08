@@ -14,33 +14,44 @@ function setupResourceBlock(page) {
 }
 
 async function scrapeTrip(url, { fs, log, config }) {
+    const startTime = new Date();
   const outputDir = config.outputDir;
   const maxScrolls = config.maxScrolls;
   const waitTimeout = config.waitTimeout;
   log(`Launching browser for URL: ${url}`);
   let browser, context, page;
-  try {
-    browser = await chromium.launch({ headless: true });
-    log(`Browser launched successfully for URL: ${url}`);
-    context = await browser.newContext({
-      userAgent: randomUserAgent(),
-      viewport: { width: 1280, height: 800 },
-      locale: "en-US",
-      extraHTTPHeaders: {
-        "accept-language": "en-US,en;q=0.9",
-        referer: "https://www.google.com/",
-      },
-    });
-    page = await context.newPage();
-    setupResourceBlock(page);
-    log(`Navigating to page: ${url}`);
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 90000 });
-    log(`Page loaded: ${url}`);
-    await page.waitForTimeout(3000 + Math.random() * 1500);
-  } catch (err) {
-    log(`Error launching browser or navigating to ${url}: ${err.message}`);
-    if (browser) await browser.close();
-    throw err;
+  let launchAttempts = 0;
+  const maxLaunchRetries = 3;
+  while (launchAttempts < maxLaunchRetries) {
+    try {
+      browser = await chromium.launch({ headless: true });
+      log(`Browser launched successfully for URL: ${url}`);
+      context = await browser.newContext({
+        userAgent: randomUserAgent(),
+        viewport: { width: 1280, height: 800 },
+        locale: "en-US",
+        extraHTTPHeaders: {
+          "accept-language": "en-US,en;q=0.9",
+          referer: "https://www.google.com/",
+        },
+      });
+      page = await context.newPage();
+      setupResourceBlock(page);
+      log(`Navigating to page: ${url}`);
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 90000 });
+      log(`Page loaded: ${url}`);
+      await page.waitForTimeout(3000 + Math.random() * 1500);
+      break;
+    } catch (err) {
+      log(`Error launching browser or navigating to ${url} (attempt ${launchAttempts + 1}): ${err.message}`);
+      if (browser) await browser.close();
+      launchAttempts++;
+      if (launchAttempts >= maxLaunchRetries) {
+        throw err;
+      }
+      log('Retrying browser launch/navigation...');
+      await new Promise(res => setTimeout(res, 2000));
+    }
   }
 
   log(`Starting scroll and card extraction for ${url}`);
@@ -116,7 +127,7 @@ async function scrapeTrip(url, { fs, log, config }) {
       const tickets = await detailPage.evaluate(() => {
         const results = [];
         const ticketContainers = document.querySelectorAll(
-          'div[class*="shelf_shelf_main_container_wrap"]',
+          'div[class*="shelf_shelf_main_container"]',
         );
         ticketContainers.forEach((container) => {
           const typeElem = container.querySelector(
@@ -147,6 +158,8 @@ async function scrapeTrip(url, { fs, log, config }) {
       let productName = card.name;
       let country = card.country;
       const scraped_date_time = new Date().toISOString();
+
+      log(`Extracted ${tickets.length} tickets for ${card.name}`);
 
       for (const t of tickets) {
         ticketResults.push({
