@@ -43,7 +43,9 @@ async function scrapeGYG(url, { fs, log, config }) {
       let results = [];
       let uniqueProducts = new Set();
       let noNewProductsTries = 0;
-      while (hasShowMore) {
+      const maxScrolls = config.maxScrolls || 20;
+      let scrolls = 0;
+      while (hasShowMore && scrolls < maxScrolls) {
         await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
         await page.waitForTimeout(waitTimeout + Math.random() * 1500);
         const products = await page.evaluate(() => {
@@ -93,11 +95,12 @@ async function scrapeGYG(url, { fs, log, config }) {
         }
         const showMoreSelector = '.show-more button';
         const showMoreVisible = await page.$(showMoreSelector);
-        if (showMoreVisible && noNewProductsTries < 3) {
+        if (showMoreVisible && noNewProductsTries < 3 && scrolls + 1 < maxScrolls) {
           log('Clicking Show more to load next page');
           await showMoreVisible.click();
           await page.waitForTimeout(waitTimeout + Math.random() * 1500);
           pageCount++;
+          scrolls++;
         } else {
           hasShowMore = false;
         }
@@ -156,15 +159,21 @@ async function scrapeGYG(url, { fs, log, config }) {
         const urlObj = new URL(url);
         // Try to extract country from pathname, e.g. /country/... or /destinations/country
         const pathParts = urlObj.pathname.split('/').filter(Boolean);
-        if (pathParts.length > 0) {
+        if (pathParts.length > 0 && pathParts[0] !== 's') {
           country = pathParts[0];
+        } else {
+          // If not found in path, try to get from ?q=country
+          const qParam = urlObj.searchParams.get('q');
+          if (qParam) {
+            country = qParam;
+          }
         }
       } catch (e) {
         country = '';
       }
       const scraped_date_time = new Date().toISOString();
       const endTime = new Date();
-      const filePath = `${outputDir}/gyg_products_${timestamp}.csv`;
+      const filePath = `${outputDir}/gyg_products_${country}_${timestamp}.csv`;
       fs.writeFileSync(filePath, "country,productName,ticketName,price,discount,scraped_date_time,startTime,endTime,totalProducts\n", "utf8");
       for (const row of results) {
         fs.appendFileSync(

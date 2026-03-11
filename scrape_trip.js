@@ -56,13 +56,25 @@ async function scrapeTrip(url, { fs, log, config }) {
 
   log(`Starting scroll and card extraction for ${url}`);
   let prevCount = 0;
+  let scrollRetries = 0;
+  const maxScrollRetries = 3;
   for (let i = 0; i < maxScrolls; i++) {
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
     await page.waitForTimeout(waitTimeout + Math.random() * 1500);
-    const cardCount = await page.evaluate(() => document.querySelectorAll('h2[class*="TitleView_titleText"]').length);
+    let cardCount = await page.evaluate(() => document.querySelectorAll('h2[class*="TitleView_titleText"]').length);
     log(`Scroll ${i + 1}: cardCount=${cardCount}, prevCount=${prevCount}`);
-    if (cardCount === prevCount) break;
+    if (cardCount === prevCount) {
+      if (cardCount === 0 && scrollRetries < maxScrollRetries) {
+        log('No cards found, retrying scroll...');
+        scrollRetries++;
+        i--;
+        await page.waitForTimeout(2000);
+        continue;
+      }
+      break;
+    }
     prevCount = cardCount;
+    scrollRetries = 0;
   }
   log(`Finished scrolling. Total cards found: ${prevCount}`);
 
